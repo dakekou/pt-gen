@@ -154,3 +154,25 @@ def _handle(raw_input):
     if result.get("success"):
         result_cache.set(cache_key, result)
     return JSONResponse(result)
+
+# ---------------------------------------------------------------- 兼容第三方 ptgen 格式（PTerWEB 等工具用）
+@app.get("/api/ptgen")
+def api_ptgen_compat(request: Request, url: str = "", key: str = ""):
+    """兼容第三方 ptgen 接口：GET /api/ptgen?url=豆瓣链接[&key=密码]
+    返回纯 BBcode 文本（不是 JSON），供 PTerWEB / differential 等工具直接使用。
+    鉴权：URL 带 key 则校验，不带则放行（仅限可信反代环境使用）。
+    """
+    if key and not _check_password(key):
+        return Response("未授权：key 不正确", status_code=401, media_type="text/plain; charset=utf-8")
+    if not url or not url.strip():
+        return Response("缺少 url 参数", status_code=400, media_type="text/plain; charset=utf-8")
+    cache_key = "ptgen:" + url.strip()
+    cached = result_cache.get(cache_key)
+    if cached and cached.get("success"):
+        return Response(cached.get("bbcode", ""), media_type="text/plain; charset=utf-8")
+    result = service.generate(url)
+    if not result.get("success"):
+        return Response(f"获取失败: {result.get('error', '未知错误')}", status_code=502,
+                        media_type="text/plain; charset=utf-8")
+    result_cache.set(cache_key, result)
+    return Response(result.get("bbcode", ""), media_type="text/plain; charset=utf-8")
