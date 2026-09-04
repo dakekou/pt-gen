@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pt-gen 登录</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: #fff; color: #111; display: flex; min-height: 100vh; align-items: center; justify-content: center; }
+  .card { width: 340px; padding: 32px 28px; border: 1px solid #e5e5e5; border-radius: 8px; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+  .sub { color: #888; font-size: 13px; margin-bottom: 24px; }
+  label { display: block; font-size: 14px; margin-bottom: 6px; }
+  input[type=password] { width: 100%; padding: 10px 12px; font-size: 15px; border: 1px solid #ccc;
+         border-radius: 6px; margin-bottom: 16px; outline: none; }
+  input[type=password]:focus { border-color: #111; }
+  button { width: 100%; padding: 11px; font-size: 15px; background: #111; color: #fff; border: none;
+         border-radius: 6px; cursor: pointer; }
+  button:hover { background: #333; }
+  .err { color: #c00; font-size: 13px; margin-top: 12px; min-height: 18px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>pt-gen</h1>
+    <div class="sub">豆瓣 / IMDb / TMDb 影视资料查询汇总 · 需要密码才能使用</div>
+    <form method="post" action="/login" id="loginForm">
+      <label for="password">密码</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" autofocus required>
+      <button type="submit">登 录</button>
+    </form>
+    <div class="err" id="err"></div>
+  </div>
+  <script>
+    
+    document.getElementById('loginForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const pwd = document.getElementById('password').value;
+      const fd = new FormData(); fd.append('password', pwd);
+      try {
+        const r = await fetch('/login', {method: 'POST', body: fd});
+        if (r.status === 200) { location.href = '/app'; return; }
+        if (r.status === 401) { document.getElementById('err').textContent = '密码错误，请重试'; return; }
+        document.getElementById('err').textContent = '登录失败 (' + r.status + ')';
+      } catch (err) {
+        document.getElementById('err').textContent = '网络错误，请重试';
+      }
+    });
+  </script>
+</body>
+</html>

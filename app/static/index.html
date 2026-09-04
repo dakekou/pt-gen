@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pt-gen</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: #fff; color: #111; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+  h1 { font-size: 22px; font-weight: 600; }
+  header .right { font-size: 13px; color: #666; }
+  header .right a { color: #666; margin-left: 12px; }
+  .input-row { display: flex; gap: 8px; }
+  #input { flex: 1; padding: 11px 12px; font-size: 15px; border: 1px solid #ccc; border-radius: 6px; outline: none; }
+  #input:focus { border-color: #111; }
+  #genBtn { padding: 11px 22px; font-size: 15px; background: #111; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  #genBtn:hover { background: #333; }
+  #genBtn:disabled { background: #aaa; cursor: not-allowed; }
+  .hint { font-size: 12px; color: #999; margin: 8px 2px 20px; }
+  .status { margin: 14px 0; font-size: 14px; color: #666; min-height: 20px; }
+  .err { color: #c00; }
+  .ok { color: #0a0; }
+  .result { display: none; }
+  .poster-row { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 14px; }
+  .poster-row img { width: 120px; border: 1px solid #eee; border-radius: 4px; }
+  .meta { flex: 1; font-size: 13px; line-height: 1.9; color: #333; }
+  .meta b { color: #111; }
+  .meta .chip { display: inline-block; background: #f2f2f2; border-radius: 4px; padding: 1px 8px; margin-right: 6px; font-size: 12px; }
+  .out-label { font-size: 13px; color: #666; margin: 6px 0 6px; }
+  textarea#out { width: 100%; height: 420px; font-family: "SFMono-Regular", Consolas, "Courier New", monospace;
+        font-size: 13px; line-height: 1.65; padding: 12px; border: 1px solid #ccc; border-radius: 6px;
+        resize: vertical; white-space: pre; }
+  .btn-row { margin-top: 8px; display: flex; gap: 8px; }
+  .btn-row button { padding: 8px 16px; font-size: 14px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; }
+  .btn-row button:hover { background: #f5f5f5; }
+  #copyTip { font-size: 12px; color: #0a0; margin-left: 8px; }
+  .poster-bad { color: #c00; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>pt-gen</h1>
+    <div class="right"><span id="whoami"></span><a href="/logout">退出登录</a></div>
+  </header>
+
+  <div class="input-row">
+    <input id="input" type="text" placeholder="粘贴豆瓣 / IMDb / TMDb 完整链接，或链接末尾的数字（如 1292052 / tt0111161 / 278）" autocomplete="off">
+    <button id="genBtn">生成</button>
+  </div>
+  <div class="hint">支持：movie.douban.com/subject/xxxxx · imdb.com/title/ttxxxxx · themoviedb.org/movie/xxx 或 /tv/xxx · 以及纯数字（优先豆瓣，其次 TMDB）</div>
+
+  <div class="status" id="status"></div>
+
+  <div class="result" id="result">
+    <div class="poster-row">
+      <div id="posterBox"><img id="posterImg" alt="海报"></div>
+      <div class="meta" id="meta"></div>
+    </div>
+    <div class="out-label">生成结果（PT 发布格式，可直接复制）</div>
+    <textarea id="out" readonly></textarea>
+    <div class="btn-row">
+      <button id="copyBtn">复制结果</button>
+      <span id="copyTip"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const inputEl = document.getElementById('input');
+const genBtn = document.getElementById('genBtn');
+const statusEl = document.getElementById('status');
+const resultEl = document.getElementById('result');
+const posterImg = document.getElementById('posterImg');
+const metaEl = document.getElementById('meta');
+const outEl = document.getElementById('out');
+
+function setStatus(msg, cls) { statusEl.textContent = msg; statusEl.className = 'status ' + (cls || ''); }
+
+async function generate() {
+  const raw = inputEl.value.trim();
+  if (!raw) { setStatus('请先输入豆瓣 / IMDb / TMDb 链接或数字', 'err'); return; }
+  genBtn.disabled = true;
+  setStatus('正在查询汇总…（豆瓣 + IMDb + TMDB + 海报上传，约需 10~30 秒）');
+  resultEl.style.display = 'none';
+  try {
+    const r = await fetch('/api/gen', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({input: raw})
+    });
+    const j = await r.json();
+    if (!r.ok || !j.success) {
+      setStatus('查询失败：' + (j.error || ('HTTP ' + r.status)), 'err');
+      return;
+    }
+    render(j);
+    setStatus('查询成功', 'ok');
+  } catch (e) {
+    setStatus('网络错误：' + e.message, 'err');
+  } finally {
+    genBtn.disabled = false;
+  }
+}
+
+function render(j) {
+  const d = j.data || {};
+  const p = j.poster || {};
+  if (p.uploaded_url) {
+    posterImg.src = p.uploaded_url;
+    posterImg.style.display = '';
+  } else {
+    posterImg.style.display = 'none';
+  }
+  const posterLine = p.status === 'error'
+    ? '<div class="poster-bad">海报上传失败：' + (p.error || '') + '</div>'
+    : '<div>海报图床：<b>' + (p.host || '未上传') + '</b></div>';
+  metaEl.innerHTML =
+    '<div><span class="chip">豆瓣 ID ' + (j.douban_id || '-') + '</span>' +
+    '<span class="chip">IMDb ' + (j.imdb_id || '-') + '</span>' +
+    '<span class="chip">TMDB ' + (j.tmdb_id || '-') + '</span>' +
+    '<span class="chip">类型 ' + (j.media_type || '-') + '</span></div>' +
+    '<div>译名：' + esc(d.yiming || '') + '</div>' +
+    '<div>片名：' + esc(d.original_title || '') + '</div>' +
+    '<div>豆瓣评分：' + (d.douban_rating ? d.douban_rating + '/10 from ' + Number(d.douban_votes||0).toLocaleString() + ' users' : '暂无') + '</div>' +
+    '<div>IMDb评分：' + (d.imdb_rating != null ? d.imdb_rating + '/10 from ' + Number(d.imdb_votes||0).toLocaleString() + ' users' : '暂无') + '</div>' +
+    posterLine;
+  outEl.value = j.bbcode;
+  resultEl.style.display = 'block';
+}
+
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+genBtn.addEventListener('click', generate);
+inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') generate(); });
+
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(outEl.value);
+  } catch (e) {
+    outEl.select();
+    document.execCommand('copy');
+  }
+  const tip = document.getElementById('copyTip');
+  tip.textContent = '已复制';
+  setTimeout(() => tip.textContent = '', 1500);
+});
+</script>
+</body>
+</html>

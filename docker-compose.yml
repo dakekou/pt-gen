@@ -1,0 +1,31 @@
+services:
+  ptgen:
+    build:
+      context: .
+      args:
+        # pip 源，默认官方 PyPI；国内机器可用：PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    container_name: ptgen
+    ports:
+      - "8737:8737"
+    environment:
+      # 访问密码（网页和 API 都需要），务必修改
+      - PTGEN_PASSWORD=ptgen2024
+      # Cookie 签名密钥，修改密码后建议一并修改
+      - PTGEN_SECRET=ptgen-secret-change-me
+      # TMDB API Token（可选，默认内置可用只读 token；如失效可自行替换）
+      # - TMDB_TOKEN=Bearer xxxx
+      # OMDb API Key（可选，默认内置公共 key）
+      # - OMDB_API_KEY=thewdb
+    volumes:
+      - ptgen_cache:/app/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8737/healthz', timeout=8).status==200 else 1)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  ptgen_cache:
