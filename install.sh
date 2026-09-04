@@ -48,7 +48,13 @@ if [ "$REPO_URL" = "local" ]; then
 else
   if [ -d "$INSTALL_DIR/.git" ]; then
     echo "检测到已有安装，拉取最新代码..."
-    git -C "$INSTALL_DIR" pull --ff-only || true
+    if git -C "$INSTALL_DIR" pull --ff-only; then
+      :
+    else
+      echo "⚠️ 本地与远程历史不一致（可能远程被重置过），强制同步为远程最新版..."
+      git -C "$INSTALL_DIR" fetch origin
+      git -C "$INSTALL_DIR" reset --hard origin/main
+    fi
   else
     echo "克隆仓库: $REPO_URL"
     git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" || {

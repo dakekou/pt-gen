@@ -3,3 +3,4 @@ uvicorn[standard]>=0.29
 requests>=2.31
 beautifulsoup4>=4.12
 itsdangerous>=2.1
+python-multipart>=0.0.9
