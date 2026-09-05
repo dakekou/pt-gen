@@ -156,12 +156,97 @@ def _handle(raw_input):
     return JSONResponse(result)
 
 # ---------------------------------------------------------------- 兼容第三方 ptgen 格式（PTerWEB / pde5i.de 格式）
+def _split_list(s):
+    """把 'a / b / c' 拆成列表，空值返回空列表"""
+    if not s:
+        return []
+    return [x.strip() for x in str(s).split('/') if x.strip()]
+
+def _build_pde5i_result(result):
+    """把我们的 result 转换成 pde5i.de / PTerWEB 兼容的完整 JSON 结构"""
+    data = result.get("data", {}) or {}
+    poster = result.get("poster", {}) or {}
+    bbcode = result.get("bbcode", "")
+    # 从 crew_lines 解析导演/编剧/演员
+    director, writer, cast = [], [], []
+    for role, names in data.get("crew_lines", []) or []:
+        name_list = [n.strip() for n in str(names).split('\n') if n.strip()]
+        if "导演" in role:
+            director = [{"name": n} for n in name_list]
+        elif "编剧" in role:
+            writer = [{"name": n} for n in name_list]
+        elif "演" in role:
+            cast = [{"name": n} for n in name_list]
+    douban_rating = data.get("douban_rating", "")
+    douban_votes = data.get("douban_votes", 0)
+    imdb_rating = data.get("imdb_rating", "")
+    imdb_votes = data.get("imdb_votes", 0)
+    return {
+        "success": True,
+        "error": None,
+        "format": bbcode,
+        "data": bbcode,
+        "bbcode": bbcode,
+        "formats": {"bbcode": bbcode},
+        "site": result.get("kind", "douban"),
+        "id": result.get("douban_id") or result.get("imdb_id") or "",
+        "sid": result.get("douban_id") or "",
+        "link": data.get("douban_url", ""),
+        "chinese_title": data.get("title_zh", ""),
+        "foreign_title": data.get("original_title", ""),
+        "aka": _split_list(data.get("yiming", "")),
+        "trans_title": _split_list(data.get("yiming", "")) or [data.get("title_zh", "")],
+        "this_title": [data.get("original_title", "")] if data.get("original_title") else [],
+        "year": data.get("year", ""),
+        "playdate": _split_list(data.get("release_dates", "")),
+        "region": _split_list(data.get("region", "")),
+        "genre": _split_list(data.get("genres", "")),
+        "language": _split_list(data.get("language", "")),
+        "duration": data.get("durations", ""),
+        "episodes": "",
+        "seasons": "",
+        "poster": poster.get("uploaded_url", poster.get("original_url", "")),
+        "director": director,
+        "writer": writer,
+        "cast": cast,
+        "introduction": data.get("intro", ""),
+        "music": data.get("music", ""),
+        "awards": "",
+        "tags": [],
+        "douban_link": data.get("douban_url", ""),
+        "douban_rating_average": float(douban_rating) if douban_rating else 0,
+        "douban_votes": douban_votes,
+        "douban_rating": f"{douban_rating}/10 from {douban_votes} users" if douban_rating else "",
+        "imdb_link": data.get("imdb_url", ""),
+        "imdb_id": result.get("imdb_id", ""),
+        "imdb_rating_average": float(imdb_rating) if imdb_rating else 0,
+        "imdb_votes": imdb_votes,
+        "tmdb_link": data.get("tmdb_url", ""),
+        "tmdb_id": result.get("tmdb_id", ""),
+        "ratings": {
+            "douban": {
+                "average": float(douban_rating) if douban_rating else 0,
+                "votes": douban_votes,
+                "formatted": f"{douban_rating}/10 from {douban_votes} users" if douban_rating else "",
+                "link": data.get("douban_url", ""),
+            },
+            "imdb": {
+                "average": float(imdb_rating) if imdb_rating else 0,
+                "votes": imdb_votes,
+                "formatted": f"{imdb_rating}/10 from {imdb_votes} users" if imdb_rating else "",
+                "link": data.get("imdb_url", ""),
+            },
+        },
+        "copyright": "Powered by pt-gen",
+        "version": "1.0",
+    }
+
 @app.get("/api/ptgen")
 def api_ptgen_compat(request: Request, url: str = "", key: str = ""):
     """兼容第三方 ptgen 接口（对齐 pde5i.de / PTerWEB 格式）：
     GET /api/ptgen?url=豆瓣链接[&key=密码]
-    返回 JSON: {"success": true, "error": null, "format": "BBcode全文"}
-    BBcode 同时放在 format/data/bbcode 字段，覆盖不同工具的字段名。
+    返回完整 JSON（含 chinese_title / foreign_title / site / imdb_link 等结构化字段 + format BBcode），
+    PTerWEB 直接取 chinese_title 等字段，无需从 BBcode 正则提取。
     鉴权：URL 带 key 则校验，不带则放行（仅限可信反代环境使用）。
     """
     if key and not _check_password(key):
@@ -171,12 +256,10 @@ def api_ptgen_compat(request: Request, url: str = "", key: str = ""):
     cache_key = "ptgen:" + url.strip()
     cached = result_cache.get(cache_key)
     if cached and cached.get("success"):
-        bbcode = cached.get("bbcode", "")
-        return JSONResponse({"success": True, "error": None, "format": bbcode, "data": bbcode, "bbcode": bbcode})
+        return JSONResponse(_build_pde5i_result(cached))
     result = service.generate(url)
     if not result.get("success"):
         err = result.get("error", "未知错误")
         return JSONResponse({"success": False, "error": err, "format": ""}, status_code=502)
     result_cache.set(cache_key, result)
-    bbcode = result.get("bbcode", "")
-    return JSONResponse({"success": True, "error": None, "format": bbcode, "data": bbcode, "bbcode": bbcode})
+    return JSONResponse(_build_pde5i_result(result))
