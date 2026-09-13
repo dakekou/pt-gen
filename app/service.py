@@ -65,7 +65,12 @@ def _scrape_douban(douban_id):
         m["writer_desc"] = desc.get("编剧") or ""
         m["cast_desc"] = desc.get("主演") or ""
         m["music_desc"] = desc.get("音乐") or ""
-        m["durations"] = desc.get("片长") or ""
+        # 电视剧/动画：集数 + 每集时长；电影：总片长
+        m["episodes"] = desc.get("集数") or ""
+        if desc.get("每集"):
+            m["durations"] = desc["每集"]
+        elif desc.get("片长"):
+            m["durations"] = desc["片长"]
 
     # ---- 桌面版详情（住宅 IP 可用；失败静默）
     desktop = fetchers.fetch_douban_desktop(douban_id)
@@ -317,6 +322,7 @@ def generate(raw_input, cache=None):
         "language": (m.get("language") if m else "") or (omdb or {}).get("Language", "").replace(",", " / ") or "",
         "release_dates": release_dates,
         "durations": (m.get("durations") if m else "") or (omdb or {}).get("Runtime", ""),
+        "episodes": (m.get("episodes") if m else "") or "",
         "douban_rating": (m.get("douban_rating") if m else "") or "",
         "douban_votes": int((m.get("douban_votes") if m else 0) or 0),
         "imdb_rating": imdb_rating,
