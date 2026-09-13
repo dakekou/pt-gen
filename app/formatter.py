@@ -105,7 +105,9 @@ def build_bbcode(m, poster_upload):
         lines.append(_title_line("集　　数", str(episodes)))
     durations = m.get("durations") or m.get("duration") or ""
     if durations:
-        lines.append(_title_line("片　　长", str(durations)))
+        # 电视剧/动画：片长是每集时长，加"每集"前缀
+        dur_label = ("每集" + str(durations)) if episodes else str(durations)
+        lines.append(_title_line("片　　长", dur_label))
 
     # 演职员：固定顺序 导演 → 编剧 → 主演（"演员"改为"主演"，去掉"音乐"）
     crew_map = {}
