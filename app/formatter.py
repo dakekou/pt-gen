@@ -65,7 +65,9 @@ def format_celebrities(sections, keep=("导演", "演员", "编剧", "音乐"), 
 
 
 def build_bbcode(m, poster_upload):
-    """m 为聚合后的数据字典，poster_upload 为 {uploaded_url, host}"""
+    """m 为聚合后的数据字典，poster_upload 为 {uploaded_url, host}
+    字段顺序对齐 pde5i.de：译名→片名→年代→产地→类别→语言→上映日期→IMDb链接→IMDb评分→豆瓣评分→豆瓣链接→集数→片长→导演→编剧→主演→简介
+    """
     out = []
     if poster_upload.get("uploaded_url"):
         out.append(f"[img]{poster_upload['uploaded_url']}[/img]")
@@ -80,23 +82,42 @@ def build_bbcode(m, poster_upload):
     lines.append(_title_line("语　　言", m.get("language")))
     lines.append(_title_line("上映日期", m.get("release_dates")))
 
-    db = m.get("douban_rating")
-    if db:
-        dbv = fetchers.fmt_thousands(m.get("douban_votes") or 0)
-        lines.append(f"◎豆瓣评分{SP}{db}/10 from {dbv} users")
+    # IMDb 链接和评分（pde5i.de 顺序：IMDb链接 → IMDb评分 → 豆瓣评分 → 豆瓣链接）
+    if m.get("imdb_url"):
+        lines.append(f"◎IMDb链接  {m['imdb_url']}")
 
     im = m.get("imdb_rating")
     if im is not None:
         imv = fetchers.fmt_thousands(m.get("imdb_votes") or 0)
         lines.append(f"◎IMDb评分{SP}{im}/10 from {imv} users")
 
+    db = m.get("douban_rating")
+    if db:
+        dbv = fetchers.fmt_thousands(m.get("douban_votes") or 0)
+        lines.append(f"◎豆瓣评分{SP}{db}/10 from {dbv} users")
+
     if m.get("douban_url"):
         lines.append(f"◎豆瓣链接{SP}{m['douban_url']}")
-    if m.get("imdb_url"):
-        lines.append(f"◎IMDb链接  {m['imdb_url']}")
 
+    # 集数 / 片长
+    episodes = m.get("episodes") or m.get("episode") or ""
+    if episodes:
+        lines.append(_title_line("集　　数", str(episodes)))
+    durations = m.get("durations") or m.get("duration") or ""
+    if durations:
+        lines.append(_title_line("片　　长", str(durations)))
+
+    # 演职员：固定顺序 导演 → 编剧 → 主演（"演员"改为"主演"，去掉"音乐"）
+    crew_map = {}
     for label, text in m.get("crew_lines", []):
-        lines.append(f"◎{_spaced_label(label)}{SP}{text}")
+        if label == "音乐":
+            continue
+        if label == "演员":
+            label = "主演"
+        crew_map[label] = text
+    for pos in ("导演", "编剧", "主演"):
+        if pos in crew_map:
+            lines.append(f"◎{_spaced_label(pos)}{SP}{crew_map[pos]}")
 
     intro = (m.get("intro") or "").strip()
     if intro:
