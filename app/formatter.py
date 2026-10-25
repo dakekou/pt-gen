@@ -82,7 +82,7 @@ def build_bbcode(m, poster_upload):
     lines.append(_title_line("语　　言", m.get("language")))
     lines.append(_title_line("上映日期", m.get("release_dates")))
 
-    # IMDb 链接和评分（pde5i.de 顺序：IMDb链接 → IMDb评分 → 豆瓣评分 → 豆瓣链接）
+    # IMDb 链接和评分，然后豆瓣链接 → 豆瓣评分（评分在链接下边）
     if m.get("imdb_url"):
         lines.append(f"◎IMDb链接  {m['imdb_url']}")
 
@@ -91,13 +91,13 @@ def build_bbcode(m, poster_upload):
         imv = fetchers.fmt_thousands(m.get("imdb_votes") or 0)
         lines.append(f"◎IMDb评分{SP}{im}/10 from {imv} users")
 
+    if m.get("douban_url"):
+        lines.append(f"◎豆瓣链接{SP}{m['douban_url']}")
+
     db = m.get("douban_rating")
     if db:
         dbv = fetchers.fmt_thousands(m.get("douban_votes") or 0)
         lines.append(f"◎豆瓣评分{SP}{db}/10 from {dbv} users")
-
-    if m.get("douban_url"):
-        lines.append(f"◎豆瓣链接{SP}{m['douban_url']}")
 
     # 集数 / 片长
     episodes = m.get("episodes") or m.get("episode") or ""
@@ -130,4 +130,5 @@ def build_bbcode(m, poster_upload):
         lines.append(indented)
 
     out.extend(lines)
-    return "\n".join(x for x in out if x)
+    # 保留空行（海报后、简介前的空行），仅过滤 None（无值的字段）
+    return "\n".join(x for x in out if x is not None)
